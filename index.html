@@ -18,7 +18,6 @@
         .stat-box span { display: block; color: #5A6B7C; font-size: 13px; font-weight: bold; text-transform: uppercase; margin-bottom: 6px; }
         .stat-value { font-size: 28px; font-weight: bold; }
         canvas { border: 6px solid #8DE29D; border-radius: 14px; display: block; margin: 0 auto; max-width: 100%; height: auto; cursor: crosshair; touch-action: manipulation; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
-        .rotate-hint { display: none; text-align: center; color: #6B7A8E; font-size: 12px; margin-bottom: 8px; }
         .controls { display: flex; justify-content: center; gap: 15px; padding-top: 15px; margin-top: 25px; border-top: 2px solid rgba(141, 226, 157, 0.3); }
         button { -webkit-tap-highlight-color: transparent; touch-action: manipulation; padding: 15px 40px; font-size: 17px; font-weight: bold; color: white; border: none; border-radius: 14px; cursor: pointer; transition: transform 0.2s ease, box-shadow 0.2s ease; min-width: 160px; }
         @media (hover: hover) { button:hover { transform: translateY(-3px); box-shadow: 0 8px 25px rgba(0,0,0,0.12); } }
@@ -28,17 +27,16 @@
 
         /* Phone, portrait: compact header, five stats in one row, full-width buttons */
         @media (max-width: 700px) and (orientation: portrait) {
-            body { align-items: flex-start; padding: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left)); }
-            .game-box { padding: 12px; border-radius: 16px; }
-            h1 { font-size: 18px; margin-bottom: 4px; }
-            .subtitle { font-size: 12px; margin-bottom: 10px; }
-            .info-panel { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; padding: 8px 4px; margin-bottom: 10px; border-radius: 12px; }
+            body { align-items: flex-start; padding: max(4px, env(safe-area-inset-top)) max(4px, env(safe-area-inset-right)) max(4px, env(safe-area-inset-bottom)) max(4px, env(safe-area-inset-left)); }
+            .game-box { padding: 8px; border-radius: 16px; }
+            h1 { font-size: 16px; margin-bottom: 4px; }
+            .subtitle { display: none; }
+            .info-panel { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; padding: 6px 4px; margin-bottom: 6px; border-radius: 12px; }
             .stat-box span { font-size: 9px; margin-bottom: 2px; }
             .stat-value { font-size: 18px; }
-            .rotate-hint { display: block; }
-            canvas { border-width: 3px; border-radius: 10px; }
-            .controls { gap: 10px; padding-top: 12px; margin-top: 12px; }
-            button { flex: 1; min-width: 0; padding: 12px 8px; font-size: 14px; border-radius: 12px; }
+            canvas { border-width: 3px; border-radius: 10px; max-height: calc(100vh - 175px); max-height: calc(100dvh - 175px); }
+            .controls { gap: 10px; padding-top: 8px; margin-top: 8px; }
+            button { flex: 1; min-width: 0; padding: 10px 8px; font-size: 14px; border-radius: 12px; }
         }
 
         /* Phone, landscape: board fills the height, stats and buttons in a side column */
@@ -84,8 +82,6 @@
 </div>
 </div>
 
-<p class="rotate-hint">📱 Turn your phone sideways for a bigger board</p>
-
 <canvas id="gameCanvas" width="928" height="560"></canvas>
 
 <div class="controls">
@@ -99,11 +95,21 @@
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
-// Configuration
-const ROWS = 14;
-const COLS = 23;
-const TILE_W = canvas.width / COLS;
-const TILE_H = canvas.height / ROWS;
+// Board layouts: wide for desktops and landscape phones, tall for portrait phones.
+// Path coordinates are grid tiles; the first and last points sit just off the board.
+const LAYOUTS = {
+    landscape: {
+        cols: 23, rows: 14, width: 928, height: 560,
+        path: [[-1, 2], [4, 2], [4, 10], [10, 10], [10, 4], [16, 4], [16, 11], [23, 11]]
+    },
+    portrait: {
+        cols: 14, rows: 23, width: 560, height: 920,
+        path: [[2, -1], [2, 3], [11, 3], [11, 8], [2, 8], [2, 13], [11, 13], [11, 18], [5, 18], [5, 23]]
+    }
+};
+
+let layoutName = 'landscape';
+let COLS, ROWS, TILE_W, TILE_H, PATH_GRID;
 
 const START_LIVES = 10;
 const NEXT_WAVE_DELAY = 3000;
@@ -111,11 +117,6 @@ const START_COINS = 100;
 const TOWER_COST = 50;
 const KILL_REWARD = 10;
 const WAVE_CLEAR_BONUS = 25;
-
-// Rilakkuma will walk this route (grid coordinates; the ends are off-screen)
-const PATH_GRID = [
-    [-1, 2], [4, 2], [4, 10], [10, 10], [10, 4], [16, 4], [16, 11], [COLS, 11]
-];
 
 // Kiiroitori tower properties (yellow bird defender)
 const kiiroitoriTower = {
@@ -136,6 +137,26 @@ let hoverTile = null;
 let lastTime = 0, animTime = 0;
 
 // ==================== GAME SETUP & INITIALIZATION ====================
+
+function pickLayout() {
+    const narrowPortrait = typeof matchMedia === 'function' &&
+        matchMedia('(max-width: 700px) and (orientation: portrait)').matches;
+    return narrowPortrait ? 'portrait' : 'landscape';
+}
+
+function applyLayout(name) {
+    const L = LAYOUTS[name];
+    layoutName = name;
+    COLS = L.cols;
+    ROWS = L.rows;
+    PATH_GRID = L.path;
+    canvas.width = L.width;
+    canvas.height = L.height;
+    TILE_W = canvas.width / COLS;
+    TILE_H = canvas.height / ROWS;
+    hoverTile = null;
+    initGrid();
+}
 
 function initGrid() {
     pathPts = PATH_GRID.map(([gx, gy]) => ({ x: (gx + 0.5) * TILE_W, y: (gy + 0.5) * TILE_H }));
@@ -284,6 +305,7 @@ function waveEnemyCount(n) {
 }
 
 function startGame() {
+    if (pickLayout() !== layoutName) applyLayout(pickLayout());
     gameScore = 0;
     waveNum = 1;
     lives = START_LIVES;
@@ -722,7 +744,12 @@ function gameLoop(currentTime) {
     requestAnimationFrame(gameLoop);
 }
 
-initGrid();
+// Switch boards on rotate/resize, but never in the middle of a game
+window.addEventListener('resize', () => {
+    if (gameState !== 'playing' && pickLayout() !== layoutName) applyLayout(pickLayout());
+});
+
+applyLayout(pickLayout());
 requestAnimationFrame(gameLoop);
 </script>
 </body>
