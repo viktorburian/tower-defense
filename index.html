@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#8DE29D">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>Rilakkuma vs Kiiroitori Tower Defense</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: linear-gradient(135deg, #8DE29D 0%, #6B8E9B 100%); min-height: 100vh; display: flex; justify-content: center; align-items: center; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .game-box { width: 100%; max-width: 960px; background: linear-gradient(to bottom, #f7fbfd 0%, #e8f7ea 100%); border-radius: 20px; padding: 30px; box-shadow: 0 15px 40px rgba(141, 226, 157, 0.45); }
+        h1 { text-align: center; color: #8DE29D; margin-bottom: 8px; font-size: 32px; text-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .subtitle { text-align: center; color: #6B7A8E; margin-bottom: 20px; font-style: italic; font-size: 15px; }
+        .info-panel { display: flex; justify-content: center; gap: 30px; padding: 15px 40px; background: #ffffff; border-radius: 15px; margin-bottom: 25px; box-shadow: 0 4px 18px rgba(0,0,0,0.06); }
+        .stat-box { text-align: center; }
+        .stat-box span { display: block; color: #5A6B7C; font-size: 13px; font-weight: bold; text-transform: uppercase; margin-bottom: 6px; }
+        .stat-value { font-size: 28px; font-weight: bold; }
+        canvas { border: 6px solid #8DE29D; border-radius: 14px; display: block; margin: 0 auto; max-width: 100%; height: auto; cursor: crosshair; touch-action: manipulation; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+        .rotate-hint { display: none; text-align: center; color: #6B7A8E; font-size: 12px; margin-bottom: 8px; }
+        .controls { display: flex; justify-content: center; gap: 15px; padding-top: 15px; margin-top: 25px; border-top: 2px solid rgba(141, 226, 157, 0.3); }
+        button { -webkit-tap-highlight-color: transparent; touch-action: manipulation; padding: 15px 40px; font-size: 17px; font-weight: bold; color: white; border: none; border-radius: 14px; cursor: pointer; transition: transform 0.2s ease, box-shadow 0.2s ease; min-width: 160px; }
+        @media (hover: hover) { button:hover { transform: translateY(-3px); box-shadow: 0 8px 25px rgba(0,0,0,0.12); } }
+        button:active { transform: scale(0.97); }
+        .btn-start { background: linear-gradient(145deg, #7ED321, #6BB9A8); text-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+        .btn-reset { background: linear-gradient(145deg, #F5A623, #D98C3E); }
+
+        /* Phone, portrait: compact header, five stats in one row, full-width buttons */
+        @media (max-width: 700px) and (orientation: portrait) {
+            body { align-items: flex-start; padding: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left)); }
+            .game-box { padding: 12px; border-radius: 16px; }
+            h1 { font-size: 18px; margin-bottom: 4px; }
+            .subtitle { font-size: 12px; margin-bottom: 10px; }
+            .info-panel { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; padding: 8px 4px; margin-bottom: 10px; border-radius: 12px; }
+            .stat-box span { font-size: 9px; margin-bottom: 2px; }
+            .stat-value { font-size: 18px; }
+            .rotate-hint { display: block; }
+            canvas { border-width: 3px; border-radius: 10px; }
+            .controls { gap: 10px; padding-top: 12px; margin-top: 12px; }
+            button { flex: 1; min-width: 0; padding: 12px 8px; font-size: 14px; border-radius: 12px; }
+        }
+
+        /* Phone, landscape: board fills the height, stats and buttons in a side column */
+        @media (orientation: landscape) and (max-height: 520px) {
+            body { align-items: flex-start; min-height: 100vh; min-height: 100dvh; }
+            .game-box { display: grid; grid-template-columns: 1fr 120px; grid-template-rows: auto 1fr; grid-template-areas: "board panel" "board controls"; gap: 8px; max-width: none; min-height: 100vh; min-height: 100dvh; padding: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left)); border-radius: 0; box-shadow: none; }
+            h1, .subtitle { display: none; }
+            .info-panel { grid-area: panel; flex-direction: column; gap: 4px; padding: 8px; margin: 0; border-radius: 12px; }
+            .stat-box { display: flex; justify-content: space-between; align-items: center; }
+            .stat-box span { font-size: 10px; margin: 0; }
+            .stat-value { font-size: 16px; }
+            canvas { grid-area: board; align-self: start; justify-self: center; margin: 0; border-width: 3px; border-radius: 10px; width: auto; max-height: calc(100vh - 16px); max-height: calc(100dvh - 16px); }
+            .controls { grid-area: controls; flex-direction: column; align-self: start; gap: 8px; padding: 0; margin: 0; border: none; }
+            button { min-width: 0; padding: 10px 6px; font-size: 13px; border-radius: 10px; }
+        }
+    </style>
+</head>
+<body>
+<div class="game-box" id="gameContainer">
+<h1>🐻 🐦 Rilakkuma Tower Defense 🐦 🐻</h1>
+<p class="subtitle">Defend with the loyal yellow bird against the lazy Rilakkuma bears!</p>
+
+<div class="info-panel">
+<div class="stat-box">
+<span>SCORE:</span>
+<div id="scoreDisplay" class="stat-value">0</div>
+</div>
+<div class="stat-box">
+<span>WAVE:</span>
+<div id="waveDisplay" class="stat-value">1</div>
+</div>
+<div class="stat-box">
+<span>ENEMIES:</span>
+<div id="enemyCountDisplay" class="stat-value">0</div>
+</div>
+<div class="stat-box">
+<span>COINS:</span>
+<div id="coinsDisplay" class="stat-value">100</div>
+</div>
+<div class="stat-box">
+<span>LIVES:</span>
+<div id="livesDisplay" class="stat-value">10</div>
+</div>
+</div>
+
+<p class="rotate-hint">📱 Turn your phone sideways for a bigger board</p>
+
+<canvas id="gameCanvas" width="928" height="560"></canvas>
+
+<div class="controls">
+<button class="btn-start" onclick="startGame()">▶️ START GAME</button>
+<button class="btn-reset" onclick="startNewWave()">↺ NEXT WAVE</button>
+</div>
+</div>
+
+<script>
+// ================= GAME ENGINE =================
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+// Configuration
+const ROWS = 14;
+const COLS = 23;
+const TILE_W = canvas.width / COLS;
+const TILE_H = canvas.height / ROWS;
+
+const START_LIVES = 10;
+const NEXT_WAVE_DELAY = 3000;
+const START_COINS = 100;
+const TOWER_COST = 50;
+const KILL_REWARD = 10;
+const WAVE_CLEAR_BONUS = 25;
+
+// Rilakkuma will walk this route (grid coordinates; the ends are off-screen)
+const PATH_GRID = [
+    [-1, 2], [4, 2], [4, 10], [10, 10], [10, 4], [16, 4], [16, 11], [COLS, 11]
+];
+
+// Kiiroitori tower properties (yellow bird defender)
+const kiiroitoriTower = {
+    range: 150,
+    damage: 28,
+    fireDelay: 700,         // ms between shots
+    projectileSpeed: 420    // px per second
+};
+
+// Game state
+let gameState = 'idle';     // idle | playing | over
+let gameScore = 0, waveNum = 1, lives = START_LIVES, coins = START_COINS;
+let enemiesArr = [], towersArr = [], projectilesArr = [], particleEffects = [];
+let enemiesToSpawn = 0, spawnTimer = 0, nextWaveTimer = -1;
+let pathPts = [], pathCum = [], totalPathLen = 0, pathTiles = new Set();
+let bgCanvas = null;
+let hoverTile = null;
+let lastTime = 0, animTime = 0;
+
+// ==================== GAME SETUP & INITIALIZATION ====================
+
+function initGrid() {
+    pathPts = PATH_GRID.map(([gx, gy]) => ({ x: (gx + 0.5) * TILE_W, y: (gy + 0.5) * TILE_H }));
+
+    pathCum = [0];
+    for (let i = 1; i < pathPts.length; i++) {
+        const a = pathPts[i - 1], b = pathPts[i];
+        pathCum.push(pathCum[i - 1] + Math.hypot(b.x - a.x, b.y - a.y));
+    }
+    totalPathLen = pathCum[pathCum.length - 1];
+
+    // Mark every tile the route crosses so towers can't be built on it
+    pathTiles = new Set();
+    for (let i = 1; i < PATH_GRID.length; i++) {
+        const [ax, ay] = PATH_GRID[i - 1], [bx, by] = PATH_GRID[i];
+        const sx = Math.sign(bx - ax), sy = Math.sign(by - ay);
+        let x = ax, y = ay;
+        while (true) {
+            if (x >= 0 && x < COLS && y >= 0 && y < ROWS) pathTiles.add(`${x},${y}`);
+            if (x === bx && y === by) break;
+            x += sx;
+            y += sy;
+        }
+    }
+
+    bgCanvas = renderBackground();
+}
+
+function renderBackground() {
+    const bg = document.createElement('canvas');
+    bg.width = canvas.width;
+    bg.height = canvas.height;
+    const g = bg.getContext('2d');
+
+    // Checkered grass
+    for (let y = 0; y < ROWS; y++) {
+        for (let x = 0; x < COLS; x++) {
+            g.fillStyle = (x + y) % 2 ? '#B9E4A2' : '#C3EAAD';
+            g.fillRect(x * TILE_W, y * TILE_H, TILE_W + 1, TILE_H + 1);
+        }
+    }
+
+    // Little flowers on the grass
+    for (let y = 0; y < ROWS; y++) {
+        for (let x = 0; x < COLS; x++) {
+            if (pathTiles.has(`${x},${y}`)) continue;
+            const h = ((x * 73856093) ^ (y * 19349663)) >>> 0;
+            if (h % 7 !== 0) continue;
+            const fx = x * TILE_W + 8 + (h >> 3) % 24;
+            const fy = y * TILE_H + 8 + (h >> 7) % 24;
+            g.fillStyle = (h >> 11) % 2 ? '#FFFFFF' : '#FFC2D4';
+            for (let k = 0; k < 5; k++) {
+                const a = k * Math.PI * 2 / 5;
+                g.beginPath();
+                g.arc(fx + Math.cos(a) * 2.6, fy + Math.sin(a) * 2.6, 1.8, 0, Math.PI * 2);
+                g.fill();
+            }
+            g.fillStyle = '#FFD93B';
+            g.beginPath();
+            g.arc(fx, fy, 1.5, 0, Math.PI * 2);
+            g.fill();
+        }
+    }
+
+    // Dirt road
+    g.lineJoin = 'round';
+    g.lineCap = 'round';
+    g.beginPath();
+    pathPts.forEach((p, i) => i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y));
+    g.strokeStyle = '#C9A66B';
+    g.lineWidth = TILE_H * 0.98;
+    g.stroke();
+    g.strokeStyle = '#EBD7A4';
+    g.lineWidth = TILE_H * 0.8;
+    g.stroke();
+
+    return bg;
+}
+
+function canvasPoint(e) {
+    const rect = canvas.getBoundingClientRect();
+    return {
+        x: (e.clientX - rect.left - canvas.clientLeft) * (canvas.width / canvas.clientWidth),
+        y: (e.clientY - rect.top - canvas.clientTop) * (canvas.height / canvas.clientHeight)
+    };
+}
+
+function tileAt(e) {
+    const p = canvasPoint(e);
+    return {
+        x: Math.max(0, Math.min(COLS - 1, Math.floor(p.x / TILE_W))),
+        y: Math.max(0, Math.min(ROWS - 1, Math.floor(p.y / TILE_H)))
+    };
+}
+
+function canBuild(gx, gy) {
+    return !pathTiles.has(`${gx},${gy}`) && !towersArr.some(t => t.gridX === gx && t.gridY === gy);
+}
+
+function canAfford() {
+    return coins >= TOWER_COST;
+}
+
+const isTouchDevice = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+let lastPointerType = 'mouse';
+
+canvas.addEventListener('pointerdown', (e) => { lastPointerType = e.pointerType; });
+canvas.addEventListener('pointermove', (e) => {
+    if (e.pointerType === 'mouse') hoverTile = tileAt(e);
+});
+canvas.addEventListener('mouseleave', () => { hoverTile = null; });
+
+// Click listener to place towers. With a finger the first tap previews the tile
+// (the tiles are small on a phone), and a second tap on the same tile builds.
+canvas.addEventListener('click', (e) => {
+    if (gameState !== 'playing') return;
+
+    const { x: gridX, y: gridY } = tileAt(e);
+    const touch = lastPointerType !== 'mouse';
+    if (touch && !(hoverTile && hoverTile.x === gridX && hoverTile.y === gridY)) {
+        hoverTile = { x: gridX, y: gridY };
+        return;
+    }
+    if (!canBuild(gridX, gridY) || !canAfford()) return;
+    if (touch) hoverTile = null;
+
+    coins -= TOWER_COST;
+    towersArr.push({
+        x: gridX * TILE_W,
+        y: gridY * TILE_H,
+        width: TILE_W,
+        height: TILE_H,
+        gridX,
+        gridY,
+        range: kiiroitoriTower.range,
+        damage: kiiroitoriTower.damage,
+        fireDelay: kiiroitoriTower.fireDelay,
+        cooldown: 0,
+        recoil: 0,
+        look: { x: 0, y: 0 }
+    });
+});
+
+function waveEnemyCount(n) {
+    return 6 + n * 2;
+}
+
+function startGame() {
+    gameScore = 0;
+    waveNum = 1;
+    lives = START_LIVES;
+    coins = START_COINS;
+    enemiesArr = [];
+    towersArr = [];
+    projectilesArr = [];
+    particleEffects = [];
+    enemiesToSpawn = waveEnemyCount(1);
+    spawnTimer = 500;
+    nextWaveTimer = -1;
+    hoverTile = null;
+    gameState = 'playing';
+}
+
+function startNewWave() {
+    if (gameState !== 'playing') return;
+    waveNum++;
+    if (enemiesToSpawn === 0) spawnTimer = 300;
+    enemiesToSpawn += waveEnemyCount(waveNum);
+    nextWaveTimer = -1;
+}
+
+function spawnEnemy() {
+    const maxHealth = 50 + waveNum * 20;
+    enemiesArr.push({
+        x: pathPts[0].x,
+        y: pathPts[0].y,
+        dist: 0,
+        speed: Math.min(115, 55 + waveNum * 5),   // px per second
+        health: maxHealth,
+        maxHealth,
+        phase: Math.random() * Math.PI * 2,
+        dead: false
+    });
+}
+
+function positionAt(dist) {
+    let i = 1;
+    while (i < pathCum.length - 1 && pathCum[i] < dist) i++;
+    const t = (dist - pathCum[i - 1]) / (pathCum[i] - pathCum[i - 1]);
+    return {
+        x: pathPts[i - 1].x + (pathPts[i].x - pathPts[i - 1].x) * t,
+        y: pathPts[i - 1].y + (pathPts[i].y - pathPts[i - 1].y) * t
+    };
+}
+
+// ================================ UPDATE =====================================
+
+function burst(x, y, colors, count, speed) {
+    for (let i = 0; i < count; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const v = speed * (0.4 + Math.random() * 0.6);
+        particleEffects.push({
+            x, y,
+            vx: Math.cos(a) * v,
+            vy: Math.sin(a) * v - 30,
+            life: 450 + Math.random() * 200,
+            maxLife: 650,
+            r: 2 + Math.random() * 2,
+            color: colors[i % colors.length]
+        });
+    }
+}
+
+function updateEnemies(dt) {
+    for (const e of enemiesArr) {
+        e.dist += e.speed * dt / 1000;
+        if (e.dist >= totalPathLen) {
+            e.dead = true;
+            lives--;
+            if (lives <= 0) gameState = 'over';
+            continue;
+        }
+        const p = positionAt(e.dist);
+        e.x = p.x;
+        e.y = p.y;
+    }
+}
+
+function updateTowers(dt) {
+    for (const t of towersArr) {
+        t.cooldown -= dt;
+        t.recoil = Math.max(0, t.recoil - dt / 180);
+
+        const cx = t.x + t.width / 2, cy = t.y + t.height / 2;
+
+        // Target whichever enemy in range is furthest along the path
+        let target = null;
+        for (const e of enemiesArr) {
+            if (e.dead || Math.hypot(e.x - cx, e.y - cy) > t.range) continue;
+            if (!target || e.dist > target.dist) target = e;
+        }
+        if (!target) continue;
+
+        const d = Math.hypot(target.x - cx, target.y - cy) || 1;
+        t.look = { x: (target.x - cx) / d, y: (target.y - cy) / d };
+
+        if (t.cooldown <= 0) {
+            t.cooldown = t.fireDelay;
+            t.recoil = 1;
+            projectilesArr.push({
+                x: cx + t.look.x * 12,
+                y: cy + t.look.y * 12,
+                target,
+                tx: target.x,
+                ty: target.y,
+                damage: t.damage,
+                angle: Math.atan2(t.look.y, t.look.x)
+            });
+        }
+    }
+}
+
+function updateProjectiles(dt) {
+    const step = kiiroitoriTower.projectileSpeed * dt / 1000;
+    projectilesArr = projectilesArr.filter(p => {
+        // Home in on the target; if it's gone, fly to where it was last seen
+        if (!p.target.dead) {
+            p.tx = p.target.x;
+            p.ty = p.target.y;
+        }
+        const dx = p.tx - p.x, dy = p.ty - p.y;
+        const d = Math.hypot(dx, dy);
+        p.angle = Math.atan2(dy, dx);
+
+        if (d > step) {
+            p.x += dx / d * step;
+            p.y += dy / d * step;
+            return true;
+        }
+
+        if (!p.target.dead) {
+            p.target.health -= p.damage;
+            burst(p.tx, p.ty, ['#FFE76A', '#FFFFFF'], 4, 90);
+            if (p.target.health <= 0) {
+                p.target.dead = true;
+                gameScore += KILL_REWARD;
+                coins += KILL_REWARD;
+                burst(p.tx, p.ty, ['#A9744F', '#F3DDB8', '#FFC2D4'], 12, 160);
+            }
+        }
+        return false;
+    });
+}
+
+function updateParticles(dt) {
+    particleEffects = particleEffects.filter(p => {
+        p.life -= dt;
+        p.x += p.vx * dt / 1000;
+        p.y += p.vy * dt / 1000;
+        p.vy += 260 * dt / 1000;
+        return p.life > 0;
+    });
+}
+
+function updateGame(dt) {
+    updateParticles(dt);
+    if (gameState !== 'playing') return;
+
+    if (enemiesToSpawn > 0) {
+        spawnTimer -= dt;
+        if (spawnTimer <= 0) {
+            spawnEnemy();
+            enemiesToSpawn--;
+            spawnTimer = Math.max(450, 1100 - waveNum * 50);
+        }
+    } else if (enemiesArr.length === 0) {
+        // Wave cleared: short breather, then the next one
+        if (nextWaveTimer < 0) {
+            nextWaveTimer = NEXT_WAVE_DELAY;
+            coins += WAVE_CLEAR_BONUS;
+        }
+        nextWaveTimer -= dt;
+        if (nextWaveTimer <= 0) startNewWave();
+    }
+
+    updateEnemies(dt);
+    updateTowers(dt);
+    updateProjectiles(dt);
+    enemiesArr = enemiesArr.filter(e => !e.dead);
+}
+
+// ================================ DRAWING =====================================
+
+function ell(cx, cy, rx, ry, fill, stroke, rot = 0) {
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, rx, ry, rot, 0, Math.PI * 2);
+    ctx.fillStyle = fill;
+    ctx.fill();
+    if (stroke) {
+        ctx.strokeStyle = stroke;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+    }
+}
+
+// Rilakkuma: chubby brown bear with a cream muzzle, tiny black eyes and nose
+function drawRilakkuma(e) {
+    const BROWN = '#A87850', OUTLINE = '#6B4428', CREAM = '#F3DDB8';
+    const swing = Math.sin(animTime * 0.012 + e.phase);
+
+    ell(e.x, e.y + 18, 13, 3.5, 'rgba(0,0,0,0.15)');
+
+    ctx.save();
+    ctx.translate(e.x, e.y - Math.abs(swing) * 2);
+    ctx.rotate(swing * 0.07);
+    ctx.scale(0.95, 0.95);
+
+    // Feet and arms
+    ell(-7, 15, 6, 4, BROWN, OUTLINE);
+    ell(7, 15, 6, 4, BROWN, OUTLINE);
+    ell(-13, 5, 4.5, 7, BROWN, OUTLINE, 0.4);
+    ell(13, 5, 4.5, 7, BROWN, OUTLINE, -0.4);
+
+    // Body and tummy
+    ell(0, 6, 12.5, 11.5, BROWN, OUTLINE);
+    ell(0, 8, 7.5, 6.5, CREAM);
+
+    // Ears
+    ell(-12, -14, 6, 6, BROWN, OUTLINE);
+    ell(12, -14, 6, 6, BROWN, OUTLINE);
+    ell(-12, -14, 3, 3, '#E8C39B');
+    ell(12, -14, 3, 3, '#E8C39B');
+
+    // Head and muzzle
+    ell(0, -5, 16, 13, BROWN, OUTLINE);
+    ell(0, -1, 7.5, 5.5, CREAM, '#D2B48C');
+
+    // Face
+    ell(-8, -5.5, 1.7, 1.9, '#1D130D');
+    ell(8, -5.5, 1.7, 1.9, '#1D130D');
+    ell(0, -3.2, 2.6, 1.8, '#2B1B12');
+    ctx.beginPath();
+    ctx.moveTo(-2.5, 0.8);
+    ctx.quadraticCurveTo(-1.2, 2.4, 0, 0.6);
+    ctx.quadraticCurveTo(1.2, 2.4, 2.5, 0.8);
+    ctx.strokeStyle = '#5A3A28';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.restore();
+
+    // Health bar
+    if (e.health < e.maxHealth) {
+        const frac = Math.max(0, e.health / e.maxHealth);
+        const k = Math.min(uiScale(), 1.5);
+        ctx.fillStyle = 'rgba(60, 40, 30, 0.6)';
+        ctx.fillRect(e.x - 15, e.y - 25 - 5 * k, 30, 5 * k);
+        ctx.fillStyle = frac > 0.5 ? '#6CC24A' : frac > 0.25 ? '#F5A623' : '#E53935';
+        ctx.fillRect(e.x - 14, e.y - 25 - 4 * k, 28 * frac, 3 * k);
+    }
+}
+
+// Kiiroitori: round yellow chick with a head tuft, bead eyes and a small orange beak
+function drawKiiroitori(t) {
+    const YELLOW = '#FFD93B', OUTLINE = '#D9A21B', ORANGE = '#FF9A2E';
+    const cx = t.x + t.width / 2, cy = t.y + t.height / 2;
+    const breathe = Math.sin(animTime * 0.004 + t.gridX) * 0.03;
+    const squash = t.recoil * 0.12;
+
+    ell(cx, cy + 18, 13, 3.5, 'rgba(0,0,0,0.15)');
+
+    ctx.save();
+    ctx.translate(cx, cy + 2);
+    ctx.scale(0.95 * (1 + squash), 0.95 * (1 - squash + breathe));
+
+    // Feet and wings
+    ell(-5, 15.5, 4, 2.5, ORANGE, '#D9791A');
+    ell(5, 15.5, 4, 2.5, ORANGE, '#D9791A');
+    ell(-15, 3, 4, 6, YELLOW, OUTLINE, 0.4);
+    ell(15, 3, 4, 6, YELLOW, OUTLINE, -0.4);
+
+    // Body and tummy
+    ell(0, 1, 16, 15, YELLOW, OUTLINE);
+    ell(0, 6, 10, 8, '#FFF0A0');
+
+    // Head tuft
+    ctx.beginPath();
+    ctx.moveTo(-2, -13); ctx.quadraticCurveTo(-5, -20, -8, -19);
+    ctx.moveTo(0, -14); ctx.quadraticCurveTo(0, -22, 3, -22);
+    ctx.moveTo(2, -13); ctx.quadraticCurveTo(6, -20, 9, -18);
+    ctx.strokeStyle = OUTLINE;
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.stroke();
+
+    // Cheeks
+    ell(-10, 4, 3.5, 2.2, 'rgba(255, 120, 120, 0.35)');
+    ell(10, 4, 3.5, 2.2, 'rgba(255, 120, 120, 0.35)');
+
+    // Eyes follow the current target
+    const lx = t.look.x * 1.4, ly = t.look.y * 1.4;
+    for (const side of [-1, 1]) {
+        ell(side * 6 + lx, -3 + ly, 2.2, 2.4, '#1D130D');
+        ell(side * 6 + lx - 0.7, -3.8 + ly, 0.8, 0.8, '#FFFFFF');
+    }
+
+    // Beak
+    ctx.beginPath();
+    ctx.moveTo(-4, 0);
+    ctx.quadraticCurveTo(0, -2, 4, 0);
+    ctx.quadraticCurveTo(2.5, 4.5, 0, 5.5);
+    ctx.quadraticCurveTo(-2.5, 4.5, -4, 0);
+    ctx.fillStyle = ORANGE;
+    ctx.fill();
+    ctx.strokeStyle = '#D9791A';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.restore();
+}
+
+function drawProjectiles() {
+    for (const p of projectilesArr) {
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.angle);
+        ell(0, 0, 6, 3.5, '#FFF3B0', '#E3A81C');
+        ctx.restore();
+    }
+}
+
+function drawParticles() {
+    for (const p of particleEffects) {
+        ctx.globalAlpha = Math.max(0, p.life / p.maxLife);
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+}
+
+// The canvas is scaled down on a phone, so grow text to keep it legible
+function uiScale() {
+    return Math.max(1, canvas.width / (canvas.clientWidth || canvas.width) * 0.6);
+}
+
+function fitText(text, x, y, size, maxW) {
+    let px = Math.round(size * uiScale());
+    ctx.font = `bold ${px}px Arial`;
+    while (px > 8 && ctx.measureText(text).width > maxW) {
+        px--;
+        ctx.font = `bold ${px}px Arial`;
+    }
+    ctx.textAlign = 'center';
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = Math.max(2, px / 6);
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
+    ctx.strokeText(text, x, y);
+    ctx.fillText(text, x, y);
+    ctx.textAlign = 'start';
+}
+
+function drawHover() {
+    if (gameState !== 'playing' || !hoverTile) return;
+    const { x, y } = hoverTile;
+    const ok = canBuild(x, y) && canAfford();
+    ctx.fillStyle = ok ? 'rgba(255, 255, 255, 0.35)' : 'rgba(229, 57, 53, 0.35)';
+    ctx.fillRect(x * TILE_W, y * TILE_H, TILE_W, TILE_H);
+    if (ok) {
+        ctx.beginPath();
+        ctx.arc((x + 0.5) * TILE_W, (y + 0.5) * TILE_H, kiiroitoriTower.range, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+    } else if (canBuild(x, y)) {
+        ctx.fillStyle = 'white';
+        fitText(`${TOWER_COST} 🪙`, (x + 0.5) * TILE_W, (y + 0.5) * TILE_H + 5, 13, canvas.width * 0.3);
+    }
+
+    if (ok && lastPointerType !== 'mouse') {
+        ctx.fillStyle = 'white';
+        const labelY = y < 2 ? (y + 1) * TILE_H + 18 * uiScale() : y * TILE_H - 8;
+        const labelX = Math.max(canvas.width * 0.12, Math.min(canvas.width * 0.88, (x + 0.5) * TILE_W));
+        fitText('Tap again to build', labelX, labelY, 13, canvas.width * 0.3);
+    }
+}
+
+function drawOverlay(title, lines) {
+    const k = uiScale();
+    const cx = canvas.width / 2, maxW = canvas.width * 0.9;
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = 'white';
+    fitText(title, cx, canvas.height / 2 - 14 * k, 44, maxW);
+    lines.forEach((line, i) => fitText(line, cx, canvas.height / 2 + (22 + i * 26) * k, 20, maxW));
+}
+
+function render() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(bgCanvas, 0, 0);
+
+    drawHover();
+    // Draw back-to-front so lower sprites overlap the ones above them
+    const sprites = [
+        ...towersArr.map(t => ({ y: t.y + t.height / 2, draw: () => drawKiiroitori(t) })),
+        ...enemiesArr.map(e => ({ y: e.y, draw: () => drawRilakkuma(e) }))
+    ].sort((a, b) => a.y - b.y);
+    sprites.forEach(s => s.draw());
+    drawProjectiles();
+    drawParticles();
+
+    if (gameState === 'idle') {
+        const verb = isTouchDevice ? 'tap' : 'click';
+        drawOverlay('Rilakkuma Tower Defense', [
+            `Press START GAME, then ${verb} the grass`,
+            `to place a Kiiroitori (${TOWER_COST} coins)`
+        ]);
+    } else if (gameState === 'over') {
+        drawOverlay('Game Over', [`Score ${gameScore} · reached wave ${waveNum}`]);
+    } else if (nextWaveTimer > 0) {
+        ctx.fillStyle = 'white';
+        fitText(`Wave ${waveNum + 1} in ${Math.ceil(nextWaveTimer / 1000)}…`, canvas.width / 2, 12 + 24 * uiScale(), 24, canvas.width * 0.9);
+    }
+}
+
+function updateHud() {
+    document.getElementById('scoreDisplay').textContent = gameScore;
+    document.getElementById('waveDisplay').textContent = waveNum;
+    document.getElementById('enemyCountDisplay').textContent = enemiesArr.length + enemiesToSpawn;
+    document.getElementById('coinsDisplay').textContent = coins;
+    document.getElementById('livesDisplay').textContent = lives;
+}
+
+function gameLoop(currentTime) {
+    const dt = Math.min(50, currentTime - (lastTime || currentTime));
+    lastTime = currentTime;
+    animTime += dt;
+    updateGame(dt);
+    render();
+    updateHud();
+    requestAnimationFrame(gameLoop);
+}
+
+initGrid();
+requestAnimationFrame(gameLoop);
+</script>
+</body>
+</html>
